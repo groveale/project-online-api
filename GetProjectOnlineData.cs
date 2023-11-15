@@ -20,17 +20,23 @@ namespace groveale
             log.LogInformation("C# HTTP trigger function processed a request.");
 
             // refreshToken and client secret will end up in a keyVault - but for now are parameters
-            string name = req.Query["refreshToken"];
+            string refreshToken = req.Query["refreshToken"];
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
-            name = name ?? data?.name;
+            refreshToken = refreshToken ?? data?.name;
 
-            string responseMessage = string.IsNullOrEmpty(name)
-                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
-                : $"Hello, {name}. This HTTP triggered function executed successfully.";
+            var settings = Settings.LoadSettings();
 
-            return new OkObjectResult(responseMessage);
+            var authHelper = new AuthenticationHelper(settings.ClientId, settings.ClientSecret, refreshToken, settings.Scope, settings.TenantId);
+
+            var accessToken = await authHelper.GetAccessToken();
+
+            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1));
+
+            var projectDate = projectHelper.GetProjects();
+
+            return new OkObjectResult("Yay");
         }
     }
 }
