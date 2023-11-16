@@ -9,6 +9,8 @@ namespace groveale
         public string? TenantId { get; set; }
         public string? ProjectOnlineSiteUrl { get;set;}
         public string? Scope { get; set; }
+        public bool Debug { get; set; }
+        public string? SqlConnectionString { get; set; }
 
         public static Settings LoadSettings()
         {
@@ -18,7 +20,9 @@ namespace groveale
                 ClientSecret = Environment.GetEnvironmentVariable("clientSecret"),
                 TenantId = Environment.GetEnvironmentVariable("tenantId"),
                 ProjectOnlineSiteUrl = Environment.GetEnvironmentVariable("projectOnlineSiteUrl"),
-                Scope = Environment.GetEnvironmentVariable("scope")
+                Scope = Environment.GetEnvironmentVariable("scope"),
+                Debug = Environment.GetEnvironmentVariable("debug") == "true",
+                SqlConnectionString = Environment.GetEnvironmentVariable("sqlConnectionString")                
             };
         }
     }

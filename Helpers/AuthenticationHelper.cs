@@ -40,8 +40,12 @@ namespace groveale
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var tokenResponse = await response.Content.ReadFromJsonAsync<TokenResponse>();
-                    return tokenResponse.AccessToken;
+                    var tokenResponse = await response.Content.ReadAsStringAsync();
+                    
+                    // Deserialize the JSON string into a TokenResponse object
+                    TokenResponse tokenResponseObject = Newtonsoft.Json.JsonConvert.DeserializeObject<TokenResponse>(tokenResponse);
+
+                    return tokenResponseObject.access_token;
                 }
                 else
                 {
@@ -53,9 +57,13 @@ namespace groveale
 
         public class TokenResponse
         {
-            public string AccessToken { get; set; }
-            public string TokenType { get; set; }
-            public int ExpiresIn { get; set; }
+            public string token_type { get; set; }
+            public string scope { get; set; }
+            public int expires_in { get; set; }
+            public int ext_expires_in { get; set; }
+            public string access_token { get; set; }
+            public string refresh_token { get; set; }
+            public string id_token { get; set; }
         }
     }
 

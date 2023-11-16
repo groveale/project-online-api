@@ -32,11 +32,19 @@ namespace groveale
 
             var accessToken = await authHelper.GetAccessToken();
 
-            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1));
+            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1), settings.Debug);
 
-            var projectDate = projectHelper.GetProjects();
+            var projectData = await projectHelper.GetProjects();
 
-            return new OkObjectResult("Yay");
+            // Go and get other data
+
+            var sqlHelper = new SqlHelper(settings.SqlConnectionString);
+
+            // NEed a list of objects rather than an object that contains a list
+
+            //sqlHelper.AddObjectToTable(projectData, "Projects");
+
+            return new OkObjectResult(projectData);
         }
     }
 }
