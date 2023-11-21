@@ -7,6 +7,8 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System.Collections.Generic;
+using Newtonsoft.Json.Linq;
 
 namespace groveale
 {
@@ -21,10 +23,12 @@ namespace groveale
 
             // refreshToken and client secret will end up in a keyVault - but for now are parameters
             string refreshToken = req.Query["refreshToken"];
+            string deltaPull = req.Query["deltaPull"];
 
             string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
             dynamic data = JsonConvert.DeserializeObject(requestBody);
             refreshToken = refreshToken ?? data?.name;
+            deltaPull = deltaPull ?? data?.deltaPull;
 
             var settings = Settings.LoadSettings();
 
@@ -42,9 +46,26 @@ namespace groveale
 
             // NEed a list of objects rather than an object that contains a list
 
-            //sqlHelper.AddObjectToTable(projectData, "Projects");
+            int rowsAffected = 0;
 
-            return new OkObjectResult(projectData);
+            foreach(var project in projectData)
+            {
+                // add snapshot date to each project object
+                project["SnapshotDate"] = DateTime.Now;
+
+                try {
+                    sqlHelper.AddObjectToTable(project, "Projects");
+                    rowsAffected++;
+                }
+                catch (Exception ex)
+                {
+                    // SQL error
+                    log.LogError(ex.Message);
+                }
+            }
+            
+            return new OkObjectResult($"{rowsAffected} rows affected");
+            //return new OkObjectResult(projectData);
         }
     }
 }

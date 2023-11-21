@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace groveale 
 {
@@ -26,42 +29,42 @@ namespace groveale
             _httpClient.BaseAddress = new Uri($"{_projectOnlineUrl}/_api/ProjectData/");
         }
 
-        public async Task<object> GetProjects()
+        public async Task<List<JObject>> GetProjects()
         {
             return await GetApiData("Projects");
         }
 
-        public async Task<object> GetProjectsBaseline()
+        public async Task<List<JObject>> GetProjectsBaseline()
         {
             return await GetApiData("ProjectsBaseline");
         }
 
-        public async Task<object> GetTasks()
+        public async Task<List<JObject>> GetTasks()
         {
             return await GetApiData("Tasks");
         }
 
-        public async Task<object> GetTaskBaseline()
+        public async Task<List<JObject>> GetTaskBaseline()
         {
             return await GetApiData("TaskBaseline");
         }
 
-        public async Task<object> GetAssignments()
+        public async Task<List<JObject>> GetAssignments()
         {
             return await GetApiData("Assignments");
         }
 
-        public async Task<object> GetAssignmentBaseline()
+        public async Task<List<JObject>> GetAssignmentBaseline()
         {
             return await GetApiData("AssignmentBaseline");
         }
 
-        public async Task<object> GetResources()
+        public async Task<List<JObject>> GetResources()
         {
             return await GetApiData("Resources");
         }
 
-        private async Task<object> GetApiData(string apiEndpoint)
+        private async Task<List<JObject>> GetApiData(string apiEndpoint)
         {
             // Obtain access token using refresh token
             string accessToken = await GetAccessToken();
@@ -89,8 +92,12 @@ namespace groveale
 
             if (response.IsSuccessStatusCode)
             {
-                // Process the response (parse JSON or other actions)
-                return await response.Content.ReadAsAsync<object>();
+                // Process the response (parse JSON and convert to list of objects)
+                var content = await response.Content.ReadAsStringAsync();
+                var jsonObject = JObject.Parse(content);
+                var value = jsonObject["value"].ToString();
+                var result = JsonConvert.DeserializeObject<List<JObject>>(value);
+                return result;
             }
             else
             {

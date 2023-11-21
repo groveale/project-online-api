@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.SqlClient;
+using Newtonsoft.Json.Linq;
 
 public class SqlHelper
 {
@@ -11,11 +13,30 @@ public class SqlHelper
         _connectionString = connectionString;
     }
 
-    public void AddObjectToTable<T>(T dynamicData, string tableName)
+    public void AddObjectToTable(JObject JSONdata, string tableName)
     {
+        List<string> columnNames = new List<string>();
+        List<string> columnValues = new List<string>();
+
+        foreach (var property in JSONdata.Properties())
+        {
+            columnNames.Add(property.Name);
+            if (property.Value.Type == JTokenType.Date)
+            {
+                columnValues.Add(((DateTime)property.Value).ToString("yyyy-MM-dd HH:mm:ss"));
+            }
+            else
+            {
+                columnValues.Add(property.Value.ToString());
+            }
+        }
+
         // Generate the SQL query dynamically
-        string columns = string.Join(", ", dynamicData.GetType().GetProperties().Select(p => p.Name));
-        string values = string.Join(", ", dynamicData.GetType().GetProperties().Select(p => $"@{p.Name}"));
+        // string columns = string.Join(", ", JSONdata.GetType().GetProperties().Select(p => p.Name));
+        // string values = string.Join(", ", JSONdata.GetType().GetProperties().Select(p => $"@{p.Name}"));
+        string columns = string.Join(", ", columnNames);
+        string values = string.Join(", ", columnValues.Select(v => $"'{v}'")); // wrap values in single quotes
+
         string query = $"INSERT INTO {tableName} ({columns}) VALUES ({values})";
 
         using (SqlConnection connection = new SqlConnection(_connectionString))
@@ -24,13 +45,6 @@ public class SqlHelper
 
             using (SqlCommand command = new SqlCommand(query, connection))
             {
-                // Add parameters dynamically
-                foreach (var property in dynamicData.GetType().GetProperties())
-                {
-                    object value = property.GetValue(dynamicData) ?? DBNull.Value;
-                    command.Parameters.AddWithValue($"@{property.Name}", value);
-                }
-
                 int rowsAffected = command.ExecuteNonQuery();
                 Console.WriteLine($"{rowsAffected} rows affected.");
             }
