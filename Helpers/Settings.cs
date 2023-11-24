@@ -9,8 +9,12 @@ namespace groveale
         public string? TenantId { get; set; }
         public string? ProjectOnlineSiteUrl { get;set;}
         public string? Scope { get; set; }
-        public bool Debug { get; set; }
+        public bool FullPull { get; set; }
         public string? SqlConnectionString { get; set; }
+        public string? KeyVaultName { get; set; }
+        public string? KeyVaultClientId { get; set; }
+        public string? KeyVaultClientSecret { get; set; }
+        public string? KeyVaultTenantId { get; set; }
 
         public static Settings LoadSettings()
         {
@@ -21,8 +25,13 @@ namespace groveale
                 TenantId = Environment.GetEnvironmentVariable("tenantId"),
                 ProjectOnlineSiteUrl = Environment.GetEnvironmentVariable("projectOnlineSiteUrl"),
                 Scope = Environment.GetEnvironmentVariable("scope"),
-                Debug = Environment.GetEnvironmentVariable("debug") == "true",
-                SqlConnectionString = Environment.GetEnvironmentVariable("sqlConnectionString")                
+                FullPull = Environment.GetEnvironmentVariable("fullPull") == "true",
+                SqlConnectionString = Environment.GetEnvironmentVariable("sqlConnectionString"),
+                KeyVaultName = Environment.GetEnvironmentVariable("keyVaultName"),
+                KeyVaultClientId = Environment.GetEnvironmentVariable("keyVaultClientId"),
+                KeyVaultClientSecret = Environment.GetEnvironmentVariable("keyVaultClientSecret"),
+                KeyVaultTenantId = Environment.GetEnvironmentVariable("keyVaultTenantId")
+                                
             };
         }
     }

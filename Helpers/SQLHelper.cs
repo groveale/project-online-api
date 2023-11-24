@@ -37,13 +37,27 @@ public class SqlHelper
         string columns = string.Join(", ", columnNames);
         string values = string.Join(", ", columnValues.Select(v => $"'{v}'")); // wrap values in single quotes
 
-        string query = $"INSERT INTO {tableName} ({columns}) VALUES ({values})";
+        //string insertQuery = $"INSERT INTO {tableName} ({columns}) VALUES ({values})";
+
+
+        // Merge query requires a primary key to be first in the column arrary
+        string mergeQuery = $@"
+            MERGE INTO {tableName} AS target
+            USING (VALUES ({values})) AS source ({columns})
+            ON target.{columnNames[0]} = source.{columnNames[0]}
+
+            WHEN MATCHED THEN
+                UPDATE SET {string.Join(", ", columnNames.Select((name, index) => $"target.{name} = source.{name}"))}
+
+            WHEN NOT MATCHED THEN
+                INSERT ({columns}) VALUES ({values});
+        ";
 
         using (SqlConnection connection = new SqlConnection(_connectionString))
         {
             connection.Open();
 
-            using (SqlCommand command = new SqlCommand(query, connection))
+            using (SqlCommand command = new SqlCommand(mergeQuery, connection))
             {
                 int rowsAffected = command.ExecuteNonQuery();
                 Console.WriteLine($"{rowsAffected} rows affected.");

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 
 namespace groveale
 {
@@ -13,14 +15,19 @@ namespace groveale
         private readonly string _refreshToken;
         private readonly string _scope;
         private readonly string _tokenEndpoint;
+        private readonly string _secretName;
 
-        public AuthenticationHelper(string clientId, string clientSecret, string refreshToken, string scope, string tenantId)
+        private KeyVaultHelper _keyVaultHelper;
+
+        public AuthenticationHelper(string clientId, string clientSecret, string scope, string tenantId, KeyVaultHelper keyVaultHelper)
         {
             _clientId = clientId;
             _clientSecret = clientSecret;
-            _refreshToken = refreshToken;
             _scope = scope;
             _tokenEndpoint = $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
+            _secretName = "SPOProjectOnlineRefreshToken";
+            _keyVaultHelper = keyVaultHelper;
+            _refreshToken = _keyVaultHelper.GetSecret(_secretName);
         }
 
         public async Task<string> GetAccessToken()
@@ -44,6 +51,11 @@ namespace groveale
                     
                     // Deserialize the JSON string into a TokenResponse object
                     TokenResponse tokenResponseObject = Newtonsoft.Json.JsonConvert.DeserializeObject<TokenResponse>(tokenResponse);
+
+                    if (_refreshToken != tokenResponseObject.refresh_token)
+                    {
+                        _keyVaultHelper.SetSecret(_secretName, tokenResponseObject.refresh_token);
+                    }
 
                     return tokenResponseObject.access_token;
                 }

@@ -21,30 +21,25 @@ namespace groveale
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            // refreshToken and client secret will end up in a keyVault - but for now are parameters
-            string refreshToken = req.Query["refreshToken"];
-            string deltaPull = req.Query["deltaPull"];
+            // refreshToken in a keyVault
+            // clientSecret and SQL connection string should also get moved to keyVault. Currently in settings
 
-            string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-            dynamic data = JsonConvert.DeserializeObject(requestBody);
-            refreshToken = refreshToken ?? data?.name;
-            deltaPull = deltaPull ?? data?.deltaPull;
+            // the solution uses app reg / client secret to get the contents of the keyVault
+            // It would be better to use Managed Identity to access the keyVault
 
             var settings = Settings.LoadSettings();
 
-            var authHelper = new AuthenticationHelper(settings.ClientId, settings.ClientSecret, refreshToken, settings.Scope, settings.TenantId);
+            var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
+
+            var authHelper = new AuthenticationHelper(settings.ClientId, settings.ClientSecret, settings.Scope, settings.TenantId, keyVaultHelper);
 
             var accessToken = await authHelper.GetAccessToken();
 
-            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1), settings.Debug);
+            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1), settings.FullPull, authHelper);
 
             var projectData = await projectHelper.GetProjects();
 
-            // Go and get other data
-
             var sqlHelper = new SqlHelper(settings.SqlConnectionString);
-
-            // NEed a list of objects rather than an object that contains a list
 
             int rowsAffected = 0;
 
@@ -52,6 +47,9 @@ namespace groveale
             {
                 // add snapshot date to each project object
                 project["SnapshotDate"] = DateTime.Now;
+
+                // get the content related to the project (as the project has been modified we can get the Tasks, Baselines and Assignments)
+                // ToDO
 
                 try {
                     sqlHelper.AddObjectToTable(project, "Projects");
@@ -65,7 +63,6 @@ namespace groveale
             }
             
             return new OkObjectResult($"{rowsAffected} rows affected");
-            //return new OkObjectResult(projectData);
         }
     }
 }

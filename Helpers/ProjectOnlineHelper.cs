@@ -13,17 +13,19 @@ namespace groveale
     {
         private readonly HttpClient _httpClient;
         private readonly string _projectOnlineUrl;
-        private readonly string _accessToken;
+        private string _accessToken;
         private readonly DateTime _accessTokenExpiration;
-        private readonly bool _debug;
+        private readonly bool _fullPull;
+        private readonly AuthenticationHelper _authHelper;
 
-        public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, bool debug = false)
+        public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, bool fullPull = false, AuthenticationHelper authHelper = null)
         {
             _httpClient = new HttpClient();
             _projectOnlineUrl = projectOnlineUrl;
             _accessToken = accessToken;
             _accessTokenExpiration = accessTokenExpiration;
-            _debug = debug;
+            _fullPull = fullPull;
+            _authHelper = authHelper;
 
             // Set the base address of the Project Online API
             _httpClient.BaseAddress = new Uri($"{_projectOnlineUrl}/_api/ProjectData/");
@@ -64,7 +66,7 @@ namespace groveale
             return await GetApiData("Resources");
         }
 
-        private async Task<List<JObject>> GetApiData(string apiEndpoint)
+        private async Task<List<JObject>> GetApiData(string apiEndpoint, string projectId = null)
         {
             // Obtain access token using refresh token
             string accessToken = await GetAccessToken();
@@ -77,15 +79,24 @@ namespace groveale
 
             // Set the date for the filter
             DateTime last24Hours = DateTime.Now.AddHours(-24);
-            if (_debug)
-            {
-                last24Hours = DateTime.Now.AddMonths(-24);
-            }
 
             // Build the REST API URL with the filter
             // Projects does have a `ProjectLastPublishedDate` that we could use instead
             // $"Projects?$filter=ProjectLastPublishedDate gt datetime'{last24Hours.ToString("yyyy-MM-ddTHH:mm:ss")}'";
+
+
             string apiUrl = $"{apiEndpoint}?$filter=ProjectModifiedDate gt datetime'{last24Hours.ToString("yyyy-MM-ddTHH:mm:ss")}'";
+
+            if (_fullPull)
+            {
+                apiUrl = $"{apiEndpoint}";
+            }
+
+            // If we are getting any data except Projects we need to filter by ProjectId
+            if (!string.IsNullOrEmpty(projectId))
+            {
+                apiUrl = $"{apiEndpoint}?$filter=ProjectId eq guid'{projectId}'";
+            }
 
             // Make the GET request
             HttpResponseMessage response = await _httpClient.GetAsync(apiUrl);
@@ -106,10 +117,16 @@ namespace groveale
             }
         }
 
+
         private async Task<string> GetAccessToken()
         {
-            // This code has been move to the AuthenticationHelper class
             // TODO - check expiration I think we get just over an hour
+            if (DateTime.Now > _accessTokenExpiration)
+            {
+                // Get a new access token
+                this._accessToken = await _authHelper.GetAccessToken();
+            }
+            
 
             return this._accessToken;
         }
