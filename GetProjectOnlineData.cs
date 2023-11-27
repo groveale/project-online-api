@@ -37,32 +37,36 @@ namespace groveale
 
             var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1), settings.FullPull, authHelper);
 
-            var projectData = await projectHelper.GetProjects();
+            var projectData = await projectHelper.GetProjectData();
 
             var sqlHelper = new SqlHelper(settings.SqlConnectionString);
 
-            int rowsAffected = 0;
+            // Dictionary of tables with rows to insert
+            Dictionary<string, int> additionalRows = new Dictionary<string, int>();
 
-            foreach(var project in projectData)
+            foreach(var dataSet in projectData)
             {
-                // add snapshot date to each project object
-                project["SnapshotDate"] = DateTime.Now;
-
-                // get the content related to the project (as the project has been modified we can get the Tasks, Baselines and Assignments)
-                // ToDO
-
-                try {
-                    sqlHelper.AddObjectToTable(project, "Projects");
-                    rowsAffected++;
-                }
-                catch (Exception ex)
+                int rowsAffected = 0;
+                log.LogInformation("Processing " + dataSet.Key + " data");
+                foreach(var item in dataSet.Value)
                 {
-                    // SQL error
-                    log.LogError(ex.Message);
+                    // add snapshot date to each project object
+                    item["SnapshotDate"] = DateTime.Now;
+
+                    try {
+                        sqlHelper.AddObjectToTable(item, dataSet.Key);
+                        rowsAffected++;
+                    }
+                    catch (Exception ex)
+                    {
+                        // SQL error
+                        log.LogError(ex.Message);
+                    }
                 }
+                additionalRows.Add(dataSet.Key, rowsAffected);
             }
             
-            return new OkObjectResult($"{rowsAffected} rows affected");
+            return new OkObjectResult(additionalRows);
         }
     }
 }
