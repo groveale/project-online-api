@@ -25,4 +25,11 @@ public class KeyVaultHelper
         _client.SetSecret(secretName, secretValue);
         Console.WriteLine($"{secretName} updated.");
     }
+
+    public KeyVaultSecret GetSecretDetails(string secretName)
+    {
+        KeyVaultSecret secret = _client.GetSecret(secretName);
+        Console.WriteLine($"{secretName} obtained.");
+        return secret;
+    }
 }
