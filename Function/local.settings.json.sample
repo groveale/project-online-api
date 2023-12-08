@@ -13,6 +13,7 @@
     "keyVaultClientId": "065dce0b-e2fe-43c9-bc1e-1f09a4700837",
     "keyVaultClientSecret": "A-k8Q~D",
     "keyVaultTenantId": "75e67881-b174-484b-9d30-c581c7ebc177",
+    "redirectUri": "http://localhost:7071/api/UpdateRefreshTokenFromAccessCode",
     "sqlConnectionString": "Server=tcp:groveale-sql-server.database.windows.net,1433;Initial Catalog=projectOnlineStage;Persist Security Info=False;User ID=CloudSAd0831052;Password=pass!;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
   }
 }
