@@ -31,7 +31,7 @@ namespace groveale
 
             var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
 
-            var authHelper = new AuthenticationHelper(settings.ClientId, settings.ClientSecret, settings.Scope, settings.TenantId, keyVaultHelper);
+            var authHelper = new AuthenticationHelper(settings, keyVaultHelper);
 
             var accessToken = await authHelper.GetAccessToken();
 

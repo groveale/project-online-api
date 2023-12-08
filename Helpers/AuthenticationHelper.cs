@@ -16,18 +16,58 @@ namespace groveale
         private readonly string _scope;
         private readonly string _tokenEndpoint;
         private readonly string _secretName;
+        private readonly string _redirectUri;
 
         private KeyVaultHelper _keyVaultHelper;
 
-        public AuthenticationHelper(string clientId, string clientSecret, string scope, string tenantId, KeyVaultHelper keyVaultHelper)
+        public AuthenticationHelper(Settings settings, KeyVaultHelper keyVaultHelper)
         {
-            _clientId = clientId;
-            _clientSecret = clientSecret;
-            _scope = scope;
-            _tokenEndpoint = $"https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
+            _clientId = settings.ClientId;
+            _clientSecret = settings.ClientSecret;
+            _scope = settings.Scope;
+            _tokenEndpoint = $"https://login.microsoftonline.com/{settings.TenantId}/oauth2/v2.0/token";
             _secretName = "SPOProjectOnlineRefreshToken";
             _keyVaultHelper = keyVaultHelper;
             _refreshToken = _keyVaultHelper.GetSecret(_secretName);
+            _redirectUri = settings.RedirectUri;
+        }
+
+        public async Task<string> UpdateRefreshTokenFromAuthCode(string authCode)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                var request = new Dictionary<string, string>
+                {
+                    { "client_id", _clientId },
+                    { "client_secret", _clientSecret },
+                    { "code", authCode },
+                    { "grant_type", "authorization_code" },
+                    { "scope", _scope },
+                    { "redirect_uri", _redirectUri }
+                };
+
+                var response = await httpClient.PostAsync(_tokenEndpoint, new FormUrlEncodedContent(request));
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var tokenResponse = await response.Content.ReadAsStringAsync();
+                    
+                    // Deserialize the JSON string into a TokenResponse object
+                    TokenResponse tokenResponseObject = Newtonsoft.Json.JsonConvert.DeserializeObject<TokenResponse>(tokenResponse);
+
+                    if (_refreshToken != tokenResponseObject.refresh_token)
+                    {
+                        _keyVaultHelper.SetSecret(_secretName, tokenResponseObject.refresh_token);
+                    }
+
+                    return tokenResponseObject.refresh_token;
+                }
+                else
+                {
+                    // Handle error
+                    throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                }
+            }
         }
 
         public async Task<string> GetAccessToken()

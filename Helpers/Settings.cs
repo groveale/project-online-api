@@ -15,6 +15,7 @@ namespace groveale
         public string? KeyVaultClientId { get; set; }
         public string? KeyVaultClientSecret { get; set; }
         public string? KeyVaultTenantId { get; set; }
+        public string? RedirectUri { get; set; }
 
         public static Settings LoadSettings()
         {
@@ -30,8 +31,8 @@ namespace groveale
                 KeyVaultName = Environment.GetEnvironmentVariable("keyVaultName"),
                 KeyVaultClientId = Environment.GetEnvironmentVariable("keyVaultClientId"),
                 KeyVaultClientSecret = Environment.GetEnvironmentVariable("keyVaultClientSecret"),
-                KeyVaultTenantId = Environment.GetEnvironmentVariable("keyVaultTenantId")
-                                
+                KeyVaultTenantId = Environment.GetEnvironmentVariable("keyVaultTenantId"),
+                RedirectUri = Environment.GetEnvironmentVariable("redirectUri")           
             };
         }
     }
