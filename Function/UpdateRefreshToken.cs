@@ -12,11 +12,19 @@ namespace groveale
 {
     public static class UpdateRefreshToken
     {
+        private const bool EnableFunction = false;
+
         [FunctionName("UpdateRefreshToken")]
         public static async Task<IActionResult> Run(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
             ILogger log)
         {
+            if (!EnableFunction)
+            {
+                log.LogInformation("Function is disabled.");
+                return new BadRequestObjectResult("Function is disabled");
+            }
+
             log.LogInformation("C# HTTP trigger function processed a request.");
 
             string refreshToken = req.Query["refreshToken"];
