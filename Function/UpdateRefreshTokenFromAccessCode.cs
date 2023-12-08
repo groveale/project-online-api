@@ -25,17 +25,19 @@ namespace groveale
             dynamic data = JsonConvert.DeserializeObject(requestBody);
             code = code ?? data?.code;
 
-            var settings = Settings.LoadSettings();
-            var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
-            var authHelper = new AuthenticationHelper(settings, keyVaultHelper);
+            try {
+                var settings = Settings.LoadSettings();
+                var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
+                var authHelper = new AuthenticationHelper(settings, keyVaultHelper);
 
-            var refreshToken = await authHelper.UpdateRefreshTokenFromAuthCode(code);
+                var refreshToken = await authHelper.UpdateRefreshTokenFromAuthCode(code);
 
-            string responseMessage = string.IsNullOrEmpty(refreshToken)
-                ? "This HTTP triggered function executed successfully. Pass a name in the query string or in the request body for a personalized response."
-                : $"Successfully updated refreshToken: {refreshToken}";
+                return new OkObjectResult($"Successfully updated refreshToken: {refreshToken}");
+            } catch (Exception ex) {
+                return new BadRequestObjectResult(ex.Message);
+            }
 
-            return new OkObjectResult(responseMessage);
+            
         }
     }
 }
