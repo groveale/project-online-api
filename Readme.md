@@ -1,4 +1,4 @@
-## ProjectOnline Auth Hack
+# ProjectOnline Auth Hack
 
 We need a way to access PorjectOnline data (in SharePoint) in an automated way, without user interaction. Unfortunalty, Project Online does not support App only authentication. We also can't use basic auth.
 
@@ -9,6 +9,10 @@ Further details of this approach can be found here - [Get access on behalf of a 
 > [!NOTE]  
 > We will be manuly handling access code and auth tokens. This is generally not recommended when working with AAD. You should use MSAL SDKs to securly handel auth tokens. However when needs must we sometimes have to go aginst recommendations!
 
+## Overview
+
+todo - inlcude a gerneral descrption and visio of the solution
+
 ### Auth Method
 
 The authentication method is OAuth 2.0 authorization code flow grant - This is not basic auth. Further detail of the authorization method can be found here - [Microsoft identity platform and OAuth 2.0 authorization code flow | Microsoft Learn](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow)
@@ -18,7 +22,7 @@ The authentication method is OAuth 2.0 authorization code flow grant - This is n
 
 ### PreReqs
 
-We require an app registration in Azure AD. 
+We requires an app registration in Azure AD. 
 
 1. Add the following delegated SPO permissions
 
@@ -121,7 +125,7 @@ Cool, if this works you have done everything correctly.
 
 ## The Auth Hack
 
-This is where the hack comes in. A refresh token (unless invalidated by something like a password change) will typically last 90 days. We can use anotehr token request, using an existing refresh token to get a new access token.
+This is where the hack comes in. A refresh token (unless invalidated by something like a password change) will typically last 90 days. We can use make an new auth token request (with out the user), using an existing (valid) refresh token to get a new access token.
 
 To test this you can perform the following, again in Postman.
 
@@ -141,60 +145,95 @@ The GUID in the URL is the tenant ID
 
 ![Postman Refresh response](res/postmanRefreshTokenResponse.png)
 
-So to automate all of this, we need to handle the persistant storage of a the refresh token. As long as we have this, we can keep our auth session active without the need for the user the reauthenticate.
+The access token can now be used to call the project online APIs
 
-## Function
+So to automate all of this, we need to handle the persistant storage of a the refresh token. As long as we have this, we can keep our auth session active without the need for the user to reauthenticate.
 
-An Azure function has been developed as the vehical to automate all of the above and also sned the data to a SQL database.
+## Solution
 
+An Azure function has been developed as the vehical to automate all of the above and also send the data to a SQL database.
 
+### Components
+
+1. KeyVault, access policies
+2. Azure Function, identitiy
+3. Azure SQL
+4. App registrations
+
+There are 4 function in the project. Two are not used but are inlcuded for reference. (they are disabled with a hardcoded flag in the source code). The two that are used:
+
+* GetProjectOnlineData
+* UpdateRefreshTokenFromAccessCode
+
+### GetProjectOnlineData
+
+This is the funciton that should be called on a daily basis (sheduled). It could actually be reconfigured to be a timer function rather that a HTTP triggered function.
+
+The following steps describe what the function does:
+
+1. Loads settings using the Settings.LoadSettings method.
+2. Creates a KeyVaultHelper object using the settings. This object is used to interact with Azure Key Vault. The core secret that this KeyVault is managing is the `refreshToken`
+3. Creates an AuthenticationHelper object using the settings and the KeyVaultHelper object. This object is used to handle authentication.
+4. Retrieves an access token using the AuthenticationHelper.GetAccessToken method.
+5. Creates a ProjectOnlineHelper object using the settings, the access token, and other parameters. This object is used to interact with Project Online.
+6. Retrieves project data using the ProjectOnlineHelper.GetProjectData method. More detail on that in the next section
+7. Creates a SqlHelper object using the SQL connection string from the settings. This object is used to interact with the SQL database.
+8. Finally, the function iterates over each dataset in the project data.
+	1. For each dataset, it iterates over each item in the dataset.
+	2. Adds a SnapshotDate property to each item, setting it to the current date and time.
+	3. Tries to add the item to the corresponding table in the SQL database using the SqlHelper.AddObjectToTable method. If this operation is successful, it increments the count of rows affected for the current dataset.
+	4. If an exception occurs while trying to add the item to the table, it catches the exception and logs an error message. The error message includes the exception message and the JSON representation of the item. This is logged to the standard function error logging framework.
+
+The function simply returns the number of records processed. This could be imporved to inlcude a flag to indicate if an error has occured. This flag could then be used to notify an admin / owner that they need to go and check the function logs.
+
+### UpdateRefreshTokenFromAccessCode
+
+This is the funciton that should be called when a new refresh token needs to be added / updated in the KeyVault. This would be upon deployment of the solution (to add the initial refresh token) and if the account that is being used needs a password change. 
+
+The recommendation is to use the PowerShell script `LoginAndPostTokenToFunction` to execute this function. This script will open a browser for the user to login via a prompt. The token callback uri of the app will point to this function and the function will request a refresh token from Entra using the auth code.
+
+This function is not needed during normal opperation. The `GetProjectOnlineData` function handles the updates if a new refresh token is issued.
+
+The following steps describe what the function does:
+
+1. Retrieves the "code" query parameter from the HTTP request. This `code` parameter is the access code returned by Entra.
+2. Reads the body of the HTTP request and deserializes it into a dynamic object.
+3. Loads settings using the Settings.LoadSettings method.
+4. Creates a KeyVaultHelper object using the settings. This object is used to interact with Azure Key Vault.
+5. Creates an AuthenticationHelper object using the settings and the KeyVaultHelper object. This object is used to handle authentication.
+6. Tries to update the refresh token using the AuthenticationHelper.UpdateRefreshTokenFromAuthCode method and the "code" value.
+7. If the refresh token is successfully updated, it returns a 200 OK response with a message indicating the new refresh token.
+8. If an exception occurs while trying to update the refresh token, it catches the exception and returns a 400 Bad Request response with the exception message.
 
 
 ## Project Online Data
 
-What data is required?
-	Would be best to have a list of APIs
+This project has been speicically developed to work with Project Online data. The function has been designed in a way that enabled further project data can be captured if requried. At the moment the following project object are pulled.
 
-	Projcts
-	Projects baseline
-	Tasks
-	Task baseline
-	Assignment
-	Assignment baseline
-	Resrouces
+* Projcts
+* Projects baseline
+* Tasks
+* Task baseline
+* Assignment
+* Assignment baseline
+* Resrouces
 
-We want the daily deltas
+The following two examples deomnstate how to retrieve the Project and ProjectBaslines data. You need to supply the `GetApiData` method the endpoint name e.g. `Projects` and the modeifed property e.g. `ProjectModifiedDate`. This is the filed that is used the ensure only the recent changes are picked up.
 
-How often is the sync required?
-	Daily
+```csharp
+public async Task<List<JObject>> GetProjects()
+{
+	return await GetApiData("Projects", "ProjectModifiedDate");
+}
 
-Where is the data going?
-	SQL
+public async Task<List<JObject>> GetProjectsBaseline()
+{
+	return await GetApiData("ProjectBaselines", "ProjectBaselineModifiedDate");
+}
+```
 
-![[Pasted image 20231109105551.png]]
+### Deltas
 
-Everything else can stay the same
+The `GetApiData` method is hardcoded to query the endpoint for data modifed in the last 24 hours. This give us the deltas over the last 24 hours. This is to decrease the load we put on SharePoint Online when pulling the PorjectOnline data. The recomendation is execute the function daily on an autoamted schedule.
 
-The PowerBI report
-
-
-Scale should be consideration
-
-
-
-Staging table
-	is cleared
-
-
-Initialization web app that can send a new auth token to the Azure function
-	For intilization and when a newpassword is required
-	Every 90 days
-	Token stored in KV?
-
-![[Pasted image 20231116110828.png]]
-
-
-A savage API endpoint to look at all the models
-
-[m365x82565687.sharepoint.com/sites/classicProject/_api/PRojectData/$metadata#AssignmentBaselines](https://m365x82565687.sharepoint.com/sites/classicProject/_api/PRojectData/$metadata#AssignmentBaselines)
-
+There is a config option to perform a full pull. This is the function settings called `fullPull`. If this is set to `true` then the filter is skipped and all project data for each enpoint is requested. There could be throttteling issues that occur if you are working in a large enviroment.

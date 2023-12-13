@@ -21,9 +21,6 @@ namespace groveale
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            // refreshToken in a keyVault
-            // clientSecret and SQL connection string should also get moved to keyVault. Currently in settings
-
             // the solution uses app reg / client secret to get the contents of the keyVault
             // It would be better to use Managed Identity to access the keyVault
 
