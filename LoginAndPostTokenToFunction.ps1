@@ -15,10 +15,11 @@
 ##############################################
 
 $client_id = "afdbe70d-fbb8-47fb-9348-ad43fed0cbda"
+$tenantId = "936f0468-e5bb-4846-b365-5ae3790deadf"
 $redirect_uri = "http://localhost:7071/api/UpdateRefreshTokenFromAccessCode"
 $scope = "profile openid email https://graph.microsoft.com/EnterpriseResource.Read https://graph.microsoft.com/Project.Read https://graph.microsoft.com/ProjectWebApp.FullControl https://graph.microsoft.com/ProjectWebAppReporting.Read https://graph.microsoft.com/User.Read offline_access"
 $state = "12345"
-$authorize_url = "https://login.microsoftonline.com/936f0468-e5bb-4846-b365-5ae3790deadf/oauth2/v2.0/authorize"
+$authorize_url = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/authorize"
 
 # Step 1: Get the authorization code
 $authorizeParams = @{

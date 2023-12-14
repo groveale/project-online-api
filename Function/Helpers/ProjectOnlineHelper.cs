@@ -132,7 +132,6 @@ namespace groveale
 
         private async Task<string> GetAccessToken()
         {
-            // TODO - check expiration I think we get just over an hour
             if (DateTime.Now > _accessTokenExpiration)
             {
                 // Get a new access token
