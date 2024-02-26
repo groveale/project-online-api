@@ -19,6 +19,18 @@ namespace groveale
         private readonly bool _fullPull;
         private readonly AuthenticationHelper _authHelper;
 
+        // dictionary of composite keys for each table
+        public readonly Dictionary<string, string[]> _compositeKeys = new Dictionary<string, string[]>
+        {
+            { "Projects", new string[] { "ProjectId" } },
+            { "ProjectBaselines", new string[] { "ProjectId", "BaselineNumber" } },
+            { "Tasks", new string[] { "ProjectId", "TaskId" } },
+            { "TaskBaselines", new string[] { "ProjectId", "TaskId", "BaselineNumber" } },
+            { "Assignments", new string[] { "ProjectId", "AssignmentId" } },
+            { "AssignmentBaselines", new string[] { "ProjectId", "AssignmentId", "BaselineNumber" } },
+            { "Resources", new string[] { "ResourceId" } }
+        };
+
         public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, bool fullPull = false, AuthenticationHelper authHelper = null)
         {
             _httpClient = new HttpClient();

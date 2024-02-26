@@ -36,7 +36,7 @@ namespace groveale
 
             var projectData = await projectHelper.GetProjectData();
 
-            var sqlHelper = new SqlHelper(settings.SqlConnectionString);
+            var sqlHelper = new SqlHelper(settings.SqlConnectionString, projectHelper._compositeKeys);
 
             // Dictionary of tables with rows to insert
             Dictionary<string, int> additionalRows = new Dictionary<string, int>();

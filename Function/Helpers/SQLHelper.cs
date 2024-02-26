@@ -7,10 +7,12 @@ using Newtonsoft.Json.Linq;
 public class SqlHelper
 {
     private readonly string _connectionString;
+    private readonly Dictionary<string, string[]> _compositeKeys;
 
-    public SqlHelper(string connectionString)
+    public SqlHelper(string connectionString, Dictionary<string, string[]> compositeKeys)
     {
         _connectionString = connectionString;
+        _compositeKeys = compositeKeys;
     }
 
     public void AddObjectToTable(JObject JSONdata, string tableName)
@@ -35,16 +37,20 @@ public class SqlHelper
         // string columns = string.Join(", ", JSONdata.GetType().GetProperties().Select(p => p.Name));
         // string values = string.Join(", ", JSONdata.GetType().GetProperties().Select(p => $"@{p.Name}"));
         string columns = string.Join(", ", columnNames);
-        string values = string.Join(", ", columnValues.Select(v => $"'{v}'")); // wrap values in single quotes
+        string values = string.Join(", ", columnValues.Select(v => $"'{v.Replace("'", "''")}'")); // wrap values in single quotes and escape any apostrophes
 
+        // Insert is the better approach, as data added to the prestaging table will be merged into the main tables anyway
         //string insertQuery = $"INSERT INTO {tableName} ({columns}) VALUES ({values})";
 
 
-        // Merge query requires a primary key to be first in the column arrary
+        // Merge query will overwrite existing data if the primary key already exists
+        //string[] keyColumnNames = { "column1", "column2" }; // Example composite key columns
+        string[] keyColumnNames = _compositeKeys[tableName];
+
         string mergeQuery = $@"
             MERGE INTO {tableName} AS target
             USING (VALUES ({values})) AS source ({columns})
-            ON target.{columnNames[0]} = source.{columnNames[0]}
+            ON {string.Join(" AND ", keyColumnNames.Select(name => $"target.{name} = source.{name}"))}
 
             WHEN MATCHED THEN
                 UPDATE SET {string.Join(", ", columnNames.Select((name, index) => $"target.{name} = source.{name}"))}
