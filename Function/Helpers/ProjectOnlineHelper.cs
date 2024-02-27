@@ -20,6 +20,7 @@ namespace groveale
         private readonly AuthenticationHelper _authHelper;
 
         // dictionary of composite keys for each table
+        // Key details obtained from key defined in the API metadata fro each object _api/projectdata/$metadata
         public readonly Dictionary<string, string[]> _compositeKeys = new Dictionary<string, string[]>
         {
             { "Projects", new string[] { "ProjectId" } },
@@ -120,25 +121,51 @@ namespace groveale
                 apiUrl = $"{apiEndpoint}";
             }
 
-            // Make the GET request
-            HttpResponseMessage response = await _httpClient.GetAsync(apiUrl);
+            List<JObject> allObjects = new List<JObject>();
 
-            if (response.IsSuccessStatusCode)
+            // Set the page size to 300
+            int pageSize = 300;
+            string doUrl = apiUrl + $"&$top={pageSize}";
+
+            do
             {
-                // Process the response (parse JSON and convert to list of objects)
-                var content = await response.Content.ReadAsStringAsync();
-                var jsonObject = JObject.Parse(content);
-                var value = jsonObject["value"].ToString();
-                var result = JsonConvert.DeserializeObject<List<JObject>>(value);
+                // Make the GET request
+                HttpResponseMessage response = await _httpClient.GetAsync(doUrl);
 
+                if (response.IsSuccessStatusCode)
+                {
+                    // Process the response (parse JSON and convert to list of objects)
+                    // need to handle pagination
+                    // check if there is a next link in the response
+                    var content = await response.Content.ReadAsStringAsync();
+                    var jsonObject = JObject.Parse(content);
+                    var value = jsonObject["value"].ToString();
 
-                return result;
-            }
-            else
-            {
-                // Handle error
-                throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
-            }
+                    var result = JsonConvert.DeserializeObject<List<JObject>>(value);
+
+                    allObjects.AddRange(result);
+
+                     // Check if there are more pages
+                    if (result.Count == pageSize)
+                    {
+                        // More items to fetch, update URL to get the next page
+                        int skipCount = allObjects.Count;
+                        doUrl = apiUrl + $"?$top={pageSize}&$skip={skipCount}";
+                    }
+                    else
+                    {
+                        // All items fetched, exit the loop
+                        return allObjects;
+                    }
+                }
+                else
+                {
+                    // Handle error
+                    throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                }
+
+            } while (true);
+            
         }
 
 
