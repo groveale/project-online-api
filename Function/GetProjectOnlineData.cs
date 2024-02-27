@@ -41,6 +41,8 @@ namespace groveale
             // Dictionary of tables with rows to insert
             Dictionary<string, int> additionalRows = new Dictionary<string, int>();
 
+            var now = DateTime.Now;
+
             foreach(var dataSet in projectData)
             {
                 int rowsAffected = 0;
@@ -48,7 +50,7 @@ namespace groveale
                 foreach(var item in dataSet.Value)
                 {
                     // add snapshot date to each project object
-                    item["SnapshotDate"] = DateTime.Now;
+                    item["SnapshotDate"] = now;
 
                     try {
                         sqlHelper.AddObjectToTable(item, dataSet.Key);
