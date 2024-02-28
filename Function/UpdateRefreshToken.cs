@@ -35,7 +35,11 @@ namespace groveale
 
             var settings = Settings.LoadSettings();
 
-            var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
+            // for local dev
+            //var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
+
+            // for Azure
+            var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName);
 
             try 
             {

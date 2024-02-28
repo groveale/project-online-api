@@ -14,7 +14,7 @@
 
 $client_id = "cd85557e-65a9-4854-b879-2671dfaee51a"
 $tenantId = "75e67881-b174-484b-9d30-c581c7ebc177"
-$redirect_uri = "http://localhost:7071/api/UpdateRefreshTokenFromAccessCode"
+$redirect_uri = "https://syncprojectonlinespodataag.azurewebsites.net/api/UpdateRefreshTokenFromAccessCode"
 $scope = "profile openid email https://graph.microsoft.com/EnterpriseResource.Read https://graph.microsoft.com/Project.Read https://graph.microsoft.com/ProjectWebAppReporting.Read https://graph.microsoft.com/User.Read offline_access"
 $state = "12345"
 $authorize_url = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/authorize"
@@ -35,7 +35,6 @@ $authorize_url_with_params = $authorize_url + "?client_id=" + $client_id + "&sco
 ##############################################
 # Main
 ##############################################
-
 
 ## Open the browser to the login page
 Start-Process $authorize_url_with_params

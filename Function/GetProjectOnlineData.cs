@@ -26,7 +26,11 @@ namespace groveale
 
             var settings = Settings.LoadSettings();
 
-            var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
+            // for local dev
+            //var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName, settings.KeyVaultClientId, settings.KeyVaultClientSecret, settings.KeyVaultTenantId);
+
+            // for Azure
+            var keyVaultHelper = new KeyVaultHelper(settings.KeyVaultName);
 
             var authHelper = new AuthenticationHelper(settings, keyVaultHelper);
 
@@ -41,6 +45,7 @@ namespace groveale
             // Dictionary of tables with rows to insert
             Dictionary<string, int> additionalRows = new Dictionary<string, int>();
 
+            // Every item in the pull with have the same snapshot date
             var now = DateTime.Now;
 
             foreach(var dataSet in projectData)
