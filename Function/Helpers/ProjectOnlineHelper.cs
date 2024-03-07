@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection.Metadata.Ecma335;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -18,6 +21,10 @@ namespace groveale
         private readonly DateTime _accessTokenExpiration;
         private readonly bool _fullPull;
         private readonly AuthenticationHelper _authHelper;
+        private ILogger _log;
+
+        private const string RETRY_AFTER = "Retry-After";
+
 
         // dictionary of composite keys for each table
         // Key details obtained from key defined in the API metadata for each object _api/projectdata/$metadata
@@ -32,7 +39,7 @@ namespace groveale
             { "Resources", new string[] { "ResourceId" } }
         };
 
-        public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, bool fullPull = false, AuthenticationHelper authHelper = null)
+        public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, ILogger log, bool fullPull = false, AuthenticationHelper authHelper = null)
         {
             _httpClient = new HttpClient();
             _projectOnlineUrl = projectOnlineUrl;
@@ -40,6 +47,7 @@ namespace groveale
             _accessTokenExpiration = accessTokenExpiration;
             _fullPull = fullPull;
             _authHelper = authHelper;
+            _log = log;
 
             // Set the base address of the Project Online API
             _httpClient.BaseAddress = new Uri($"{_projectOnlineUrl}/_api/ProjectData/");
@@ -133,6 +141,9 @@ namespace groveale
                 doUrl = apiUrl + $"&$top={pageSize}";
             }
 
+            // retry counter
+            int retries = 0;
+
             do
             {
                 // Make the GET request
@@ -140,6 +151,9 @@ namespace groveale
 
                 if (response.IsSuccessStatusCode)
                 {
+                    // reset retry counter
+                    retries = 0;
+
                     // Process the response (parse JSON and convert to list of objects)
                     // need to handle pagination
                     // check if there is a next link in the response
@@ -166,8 +180,26 @@ namespace groveale
                 }
                 else
                 {
-                    // Handle error
-                    throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                    
+                    // Handel 429 - Too many requests
+                    if (ShouldRetry(response.StatusCode, retries))
+                    {
+                        _log.LogInformation($"Received: {response.StatusCode} - calculating wait time");
+                        var waitTime = CalculateWaitTime(response);
+                        _log.LogInformation($"Waiting for {waitTime.TotalSeconds} seconds before retrying");
+                        await Task.Delay(waitTime);
+
+                        // Retry the request
+                        retries++;
+                        continue;
+                    }
+                    else
+                    {
+                        // Log error
+                        _log.LogError($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                        throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                    }
+
                 }
 
             } while (true);
@@ -188,6 +220,34 @@ namespace groveale
 
             return this._accessToken;
         }
+
+
+        internal static bool ShouldRetry(HttpStatusCode statusCode, int retries)
+        {
+            return retries < 10 &&
+                (statusCode == HttpStatusCode.ServiceUnavailable ||
+                statusCode == HttpStatusCode.GatewayTimeout ||
+                statusCode == HttpStatusCode.TooManyRequests ||
+                statusCode == (HttpStatusCode)429); 
+        }
+
+        private static TimeSpan CalculateWaitTime(HttpResponseMessage response)
+        {
+            double delayInSeconds = 10;
+
+            if (response != null && response.Headers.TryGetValues(RETRY_AFTER, out IEnumerable<string> values))
+            {
+                // Can we use the provided retry-after header?
+                string retryAfter = values.First();
+                if (int.TryParse(retryAfter, out int delaySeconds))
+                {
+                    delayInSeconds = delaySeconds;
+                }
+            }
+
+            return TimeSpan.FromSeconds(delayInSeconds);
+        }
+
     }
         
 }

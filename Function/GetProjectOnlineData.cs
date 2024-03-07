@@ -16,7 +16,7 @@ namespace groveale
     {
         [FunctionName("GetProjectOnlineData")]
         public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = null)] HttpRequest req,
+            [HttpTrigger(AuthorizationLevel.Admin, "get", "post", Route = null)] HttpRequest req,
             ILogger log)
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
@@ -36,9 +36,9 @@ namespace groveale
 
             var accessToken = await authHelper.GetAccessToken();
 
-            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1), settings.FullPull, authHelper);
+            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1), log, settings.FullPull, authHelper);
 
-            var projectData = await projectHelper.GetProjectData();
+            //var projectData = await projectHelper.GetProjectData();
 
             var sqlHelper = new SqlHelper(settings.SqlConnectionString, projectHelper._compositeKeys);
 
@@ -48,29 +48,42 @@ namespace groveale
             // Every item in the pull with have the same snapshot date
             var now = DateTime.Now;
 
-            foreach(var dataSet in projectData)
-            {
-                int rowsAffected = 0;
-                log.LogInformation("Processing " + dataSet.Key + " data");
-                foreach(var item in dataSet.Value)
-                {
-                    // add snapshot date to each project object
-                    item["SnapshotDate"] = now;
-
-                    try {
-                        sqlHelper.AddObjectToTable(item, dataSet.Key);
-                        rowsAffected++;
-                    }
-                    catch (Exception ex)
-                    {
-                        // SQL error
-                        log.LogError(ex.Message);
-                    }
-                }
-                additionalRows.Add(dataSet.Key, rowsAffected);
-            }
+            additionalRows.Add("Projects", InsertData(await projectHelper.GetProjects(), sqlHelper, now, "Projects", log));
+            additionalRows.Add("ProjectBaselines", InsertData(await projectHelper.GetProjectsBaseline(), sqlHelper, now, "ProjectBaselines", log));
+            additionalRows.Add("Tasks", InsertData(await projectHelper.GetTasks(), sqlHelper, now, "Tasks", log));
+            additionalRows.Add("TaskBaselines", InsertData(await projectHelper.GetTaskBaseline(), sqlHelper, now, "TaskBaselines", log));
+            additionalRows.Add("Assignments", InsertData(await projectHelper.GetAssignments(), sqlHelper, now, "Assignments", log));
+            additionalRows.Add("AssignmentBaselines", InsertData(await projectHelper.GetAssignmentBaseline(), sqlHelper, now, "AssignmentBaselines", log));
+            additionalRows.Add("Resources", InsertData(await projectHelper.GetResources(), sqlHelper, now, "Resources", log));
             
             return new OkObjectResult(additionalRows);
         }
+    
+    
+        // method to insert the data into the database
+        public static int InsertData(List<JObject> projectObjectData, SqlHelper sqlHelper, DateTime now, string objectKey, ILogger log)
+        {   
+            int rowsAffected = 0;
+            log.LogInformation("Processing " + objectKey + " data");
+
+            foreach(var item in projectObjectData)
+            {
+                // add snapshot date to each project object
+                item["SnapshotDate"] = now;
+
+                try {
+                    sqlHelper.AddObjectToTable(item, objectKey);
+                    rowsAffected++;
+                }
+                catch (Exception ex)
+                {
+                    // SQL error
+                    log.LogError(ex.Message);
+                }
+            }
+
+            return rowsAffected;
+        }
+
     }
 }
