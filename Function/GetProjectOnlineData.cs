@@ -36,7 +36,7 @@ namespace groveale
 
             var accessToken = await authHelper.GetAccessToken();
 
-            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddHours(1), log, settings.FullPull, authHelper);
+            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddMinutes(50), log, settings.FullPull, authHelper);
 
             //var projectData = await projectHelper.GetProjectData();
 

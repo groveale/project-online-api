@@ -18,7 +18,7 @@ namespace groveale
         private readonly HttpClient _httpClient;
         private readonly string _projectOnlineUrl;
         private string _accessToken;
-        private readonly DateTime _accessTokenExpiration;
+        public DateTime _accessTokenExpiration { get; private set; }
         private readonly bool _fullPull;
         private readonly AuthenticationHelper _authHelper;
         private ILogger _log;
@@ -106,12 +106,7 @@ namespace groveale
 
         private async Task<List<JObject>> GetApiData(string apiEndpoint, string filterField)
         {
-            // Obtain access token using refresh token
-            string accessToken = await GetAccessToken();
-
-            // Set authorization header
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
+            
             // Set the accept header to JSON
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -146,6 +141,13 @@ namespace groveale
 
             do
             {
+
+                // Obtain access token using refresh token
+                string accessToken = await GetAccessToken();
+
+                // Set authorization header
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
                 // Make the GET request
                 HttpResponseMessage response = await _httpClient.GetAsync(doUrl);
 
@@ -215,6 +217,7 @@ namespace groveale
             {
                 // Get a new access token
                 this._accessToken = await _authHelper.GetAccessToken();
+                _accessTokenExpiration = _accessTokenExpiration.AddMinutes(50);
             }
             
 
