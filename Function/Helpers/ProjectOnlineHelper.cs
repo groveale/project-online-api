@@ -22,6 +22,8 @@ namespace groveale
         private readonly bool _fullPull;
         private readonly AuthenticationHelper _authHelper;
         private ILogger _log;
+        private DateTime _snapshot;
+        public SqlHelper _sqlHelper {get; set;}
 
         private const string RETRY_AFTER = "Retry-After";
 
@@ -39,7 +41,7 @@ namespace groveale
             { "Resources", new string[] { "ResourceId" } }
         };
 
-        public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, ILogger log, bool fullPull = false, AuthenticationHelper authHelper = null)
+        public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, ILogger log, DateTime snapshot, bool fullPull = false, AuthenticationHelper authHelper = null)
         {
             _httpClient = new HttpClient();
             _projectOnlineUrl = projectOnlineUrl;
@@ -48,15 +50,18 @@ namespace groveale
             _fullPull = fullPull;
             _authHelper = authHelper;
             _log = log;
+            _snapshot = snapshot;
 
             // Set the base address of the Project Online API
             _httpClient.BaseAddress = new Uri($"{_projectOnlineUrl}/_api/ProjectData/");
+            // timeout set to 2 minutes (120 seconds)
+            _httpClient.Timeout = TimeSpan.FromMinutes(2);
         }
 
-        public async Task<Dictionary<string, List<JObject>>> GetProjectData()
+        public async Task<Dictionary<string, int>> GetProjectData()
         {
             // Dictionary of lists of objects
-            Dictionary<string, List<JObject>> projectData = new Dictionary<string, List<JObject>>();
+            Dictionary<string, int> projectData = new Dictionary<string, int>();
             
             projectData.Add("Projects", await GetProjects());
             projectData.Add("ProjectBaselines", await GetProjectsBaseline());
@@ -69,42 +74,42 @@ namespace groveale
             return projectData;
         }
 
-        public async Task<List<JObject>> GetProjects()
+        public async Task<int> GetProjects()
         {
             return await GetApiData("Projects", "ProjectModifiedDate");
         }
 
-        public async Task<List<JObject>> GetProjectsBaseline()
+        public async Task<int> GetProjectsBaseline()
         {
             return await GetApiData("ProjectBaselines", "ProjectBaselineModifiedDate");
         }
 
-        public async Task<List<JObject>> GetTasks()
+        public async Task<int> GetTasks()
         {
             return await GetApiData("Tasks", "TaskModifiedDate");
         }
 
-        public async Task<List<JObject>> GetTaskBaseline()
+        public async Task<int> GetTaskBaseline()
         {
             return await GetApiData("TaskBaselines", "TaskBaselineModifiedDate");
         }
 
-        public async Task<List<JObject>> GetAssignments()
+        public async Task<int> GetAssignments()
         {
             return await GetApiData("Assignments", "AssignmentModifiedDate");
         }
 
-        public async Task<List<JObject>> GetAssignmentBaseline()
+        public async Task<int> GetAssignmentBaseline()
         {
             return await GetApiData("AssignmentBaselines", "AssignmentBaselineModifiedDate");
         }
 
-        public async Task<List<JObject>> GetResources()
+        public async Task<int> GetResources()
         {
             return await GetApiData("Resources", "ResourceModifiedDate");
         }
 
-        private async Task<List<JObject>> GetApiData(string apiEndpoint, string filterField)
+        private async Task<int> GetApiData(string apiEndpoint, string filterField)
         {
             
             // Set the accept header to JSON
@@ -138,6 +143,8 @@ namespace groveale
 
             // retry counter
             int retries = 0;
+            int errorCount = 0;
+            int rowsAffected = 0;
 
             do
             {
@@ -148,65 +155,85 @@ namespace groveale
                 // Set authorization header
                 _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-                // Make the GET request
-                HttpResponseMessage response = await _httpClient.GetAsync(doUrl);
+                try {
+                    // Make the GET request
+                    HttpResponseMessage response = await _httpClient.GetAsync(doUrl);
 
-                if (response.IsSuccessStatusCode)
-                {
-                    // reset retry counter
-                    retries = 0;
-
-                    // Process the response (parse JSON and convert to list of objects)
-                    // need to handle pagination
-                    // check if there is a next link in the response
-                    var content = await response.Content.ReadAsStringAsync();
-                    var jsonObject = JObject.Parse(content);
-                    var value = jsonObject["value"].ToString();
-
-                    var result = JsonConvert.DeserializeObject<List<JObject>>(value);
-
-                    allObjects.AddRange(result);
-
-                     // Check if there are more pages
-                    if (result.Count == pageSize)
+                    if (response.IsSuccessStatusCode)
                     {
-                        // More items to fetch, update URL to get the next page
-                        int skipCount = allObjects.Count;
-                        doUrl = apiUrl + $"?$top={pageSize}&$skip={skipCount}";
+                        // reset retry counter
+                        retries = 0;
+                        errorCount = 0;
+
+                        // Process the response (parse JSON and convert to list of objects)
+                        // need to handle pagination
+                        // check if there is a next link in the response
+                        var content = await response.Content.ReadAsStringAsync();
+                        var jsonObject = JObject.Parse(content);
+                        var value = jsonObject["value"].ToString();
+
+                        var result = JsonConvert.DeserializeObject<List<JObject>>(value);
+
+                        // Insert the data into the database
+                        rowsAffected += InsertData(result, _sqlHelper, apiEndpoint);
+
+                        //allObjects.AddRange(result);
+
+                        // Check if there are more pages
+                        if (result.Count == pageSize)
+                        {
+                            // More items to fetch, update URL to get the next page
+                            int skipCount = allObjects.Count;
+                            doUrl = apiUrl + $"?$top={pageSize}&$skip={skipCount}";
+                        }
+                        else
+                        {
+                            // All items fetched, exit the loop
+                            break;
+                        }
                     }
                     else
                     {
-                        // All items fetched, exit the loop
-                        break;
+                        
+                        // Handel 429 - Too many requests
+                        if (ShouldRetry(response.StatusCode, retries))
+                        {
+                            _log.LogInformation($"Received: {response.StatusCode} - calculating wait time");
+                            var waitTime = CalculateWaitTime(response);
+                            _log.LogInformation($"Waiting for {waitTime.TotalSeconds} seconds before retrying");
+                            await Task.Delay(waitTime);
+
+                            // Retry the request
+                            retries++;
+                            continue;
+                        }
+                        else
+                        {
+                            // Log error
+                            _log.LogError($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                            throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                        }
+
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    
-                    // Handel 429 - Too many requests
-                    if (ShouldRetry(response.StatusCode, retries))
-                    {
-                        _log.LogInformation($"Received: {response.StatusCode} - calculating wait time");
-                        var waitTime = CalculateWaitTime(response);
-                        _log.LogInformation($"Waiting for {waitTime.TotalSeconds} seconds before retrying");
-                        await Task.Delay(waitTime);
+                    _log.LogError($"Error: {ex.Message}");
 
-                        // Retry the request
-                        retries++;
-                        continue;
-                    }
-                    else
+                    if (errorCount >= 5)
                     {
-                        // Log error
-                        _log.LogError($"Error: {response.StatusCode} - {response.ReasonPhrase}");
-                        throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                        // break out of the loop
+                        throw new InvalidOperationException($"Error: {ex.Message}");
                     }
 
+                    // retry the request
+                    errorCount++;
+                    continue;
                 }
-
+  
             } while (true);
 
-            return allObjects;
+            return rowsAffected;
             
         }
 
@@ -215,13 +242,13 @@ namespace groveale
         {
             if (DateTime.Now > _accessTokenExpiration)
             {
+                _log.LogInformation($"Access Token expired - obtaining new token");
                 // Get a new access token
-                this._accessToken = await _authHelper.GetAccessToken();
-                _accessTokenExpiration = _accessTokenExpiration.AddMinutes(50);
+                _accessToken = await _authHelper.GetAccessToken();
+                _accessTokenExpiration = _accessTokenExpiration.AddMinutes(5);
             }
-            
 
-            return this._accessToken;
+            return _accessToken;
         }
 
 
@@ -248,9 +275,41 @@ namespace groveale
                 }
             }
 
+            // we don't want our delay to be too long - no longer than 100 seconds
+            if (delayInSeconds > 100)
+            {
+                delayInSeconds = 100;
+            }
+
             return TimeSpan.FromSeconds(delayInSeconds);
         }
 
+    
+        // method to insert the data into the database
+        public int InsertData(List<JObject> projectObjectData, SqlHelper sqlHelper, string objectKey)
+        {   
+            int rowsAffected = 0;
+            _log.LogInformation("Processing " + objectKey + " data");
+
+            foreach(var item in projectObjectData)
+            {
+                // add snapshot date to each project object
+                item["SnapshotDate"] = _snapshot;
+
+                try {
+                    sqlHelper.AddObjectToTable(item, objectKey);
+                    rowsAffected++;
+                }
+                catch (Exception ex)
+                {
+                    // SQL error
+                    _log.LogError(ex.Message);
+                }
+            }
+
+            return rowsAffected;
+        }
+    
     }
         
 }
