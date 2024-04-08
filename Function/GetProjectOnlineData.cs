@@ -39,7 +39,7 @@ namespace groveale
              // Every item in the pull with have the same snapshot date
             var snapshot = DateTime.Now;
 
-            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddMinutes(5), log, snapshot, settings.FullPull, authHelper);
+            var projectHelper = new ProjectOnlineHelper(settings.ProjectOnlineSiteUrl, accessToken, DateTime.Now.AddMinutes(50), log, snapshot, settings.FullPull, authHelper);
 
             //var projectData = await projectHelper.GetProjectData();
 

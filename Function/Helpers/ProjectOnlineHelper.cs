@@ -15,7 +15,7 @@ namespace groveale
 
     public class ProjectOnlineHelper
     {
-        private readonly HttpClient _httpClient;
+        //private readonly HttpClient _httpClient;
         private readonly string _projectOnlineUrl;
         private string _accessToken;
         public DateTime _accessTokenExpiration { get; private set; }
@@ -43,7 +43,7 @@ namespace groveale
 
         public ProjectOnlineHelper(string projectOnlineUrl, string accessToken, DateTime accessTokenExpiration, ILogger log, DateTime snapshot, bool fullPull = false, AuthenticationHelper authHelper = null)
         {
-            _httpClient = new HttpClient();
+            //_httpClient = new HttpClient();
             _projectOnlineUrl = projectOnlineUrl;
             _accessToken = accessToken;
             _accessTokenExpiration = accessTokenExpiration;
@@ -51,11 +51,6 @@ namespace groveale
             _authHelper = authHelper;
             _log = log;
             _snapshot = snapshot;
-
-            // Set the base address of the Project Online API
-            _httpClient.BaseAddress = new Uri($"{_projectOnlineUrl}/_api/ProjectData/");
-            // timeout set to 2 minutes (120 seconds)
-            _httpClient.Timeout = TimeSpan.FromMinutes(2);
         }
 
         public async Task<Dictionary<string, int>> GetProjectData()
@@ -112,8 +107,6 @@ namespace groveale
         private async Task<int> GetApiData(string apiEndpoint, string filterField)
         {
             
-            // Set the accept header to JSON
-            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
             // Set the date for the filter
             DateTime last24Hours = DateTime.Now.AddHours(-24);
@@ -124,8 +117,8 @@ namespace groveale
 
             string apiUrl = $"{apiEndpoint}?$filter={filterField} gt datetime'{last24Hours.ToString("yyyy-MM-ddTHH:mm:ss")}'";
 
-            // Set the page size to 300
-            int pageSize = 300;
+            // Set the page size to 100
+            int pageSize = 100;
 
             if (_fullPull)
             {
@@ -145,92 +138,112 @@ namespace groveale
             int retries = 0;
             int errorCount = 0;
             int rowsAffected = 0;
+ 
 
             do
             {
 
+
                 // Obtain access token using refresh token
                 string accessToken = await GetAccessToken();
 
-                // Set authorization header
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-                try {
-                    // Make the GET request
-                    HttpResponseMessage response = await _httpClient.GetAsync(doUrl);
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        // reset retry counter
-                        retries = 0;
-                        errorCount = 0;
-
-                        // Process the response (parse JSON and convert to list of objects)
-                        // need to handle pagination
-                        // check if there is a next link in the response
-                        var content = await response.Content.ReadAsStringAsync();
-                        var jsonObject = JObject.Parse(content);
-                        var value = jsonObject["value"].ToString();
-
-                        var result = JsonConvert.DeserializeObject<List<JObject>>(value);
-
-                        // Insert the data into the database
-                        rowsAffected += InsertData(result, _sqlHelper, apiEndpoint);
-
-                        //allObjects.AddRange(result);
-
-                        // Check if there are more pages
-                        if (result.Count == pageSize)
-                        {
-                            // More items to fetch, update URL to get the next page
-                            int skipCount = allObjects.Count;
-                            doUrl = apiUrl + $"?$top={pageSize}&$skip={skipCount}";
-                        }
-                        else
-                        {
-                            // All items fetched, exit the loop
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        
-                        // Handel 429 - Too many requests
-                        if (ShouldRetry(response.StatusCode, retries))
-                        {
-                            _log.LogInformation($"Received: {response.StatusCode} - calculating wait time");
-                            var waitTime = CalculateWaitTime(response);
-                            _log.LogInformation($"Waiting for {waitTime.TotalSeconds} seconds before retrying");
-                            await Task.Delay(waitTime);
-
-                            // Retry the request
-                            retries++;
-                            continue;
-                        }
-                        else
-                        {
-                            // Log error
-                            _log.LogError($"Error: {response.StatusCode} - {response.ReasonPhrase}");
-                            throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
-                        }
-
-                    }
-                }
-                catch (Exception ex)
+                if (accessToken == null)
                 {
-                    _log.LogError($"Error: {ex.Message}");
-
-                    if (errorCount >= 5)
-                    {
-                        // break out of the loop
-                        throw new InvalidOperationException($"Error: {ex.Message}");
-                    }
-
-                    // retry the request
-                    errorCount++;
-                    continue;
+                    // break out of the loop
+                    throw new InvalidOperationException("Error: Unable to obtain access token");
                 }
-  
+
+                // recreate HTTP Client?
+                using (var httpClient = new HttpClient())
+                {
+                    // Set the base address of the Project Online API
+                    httpClient.BaseAddress = new Uri($"{_projectOnlineUrl}/_api/ProjectData/");
+                    // timeout set to 2 minutes (120 seconds)
+                    httpClient.Timeout = TimeSpan.FromMinutes(2);
+
+                    // Set the accept header to JSON
+                    httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                
+                    // Set authorization header
+                    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+                    try {
+                        // Make the GET request
+                        HttpResponseMessage response = await httpClient.GetAsync(doUrl);
+
+                        if (response.IsSuccessStatusCode)
+                        {
+                            // reset retry counter
+                            retries = 0;
+                            errorCount = 0;
+
+                            // Process the response (parse JSON and convert to list of objects)
+                            // need to handle pagination
+                            // check if there is a next link in the response
+                            var content = await response.Content.ReadAsStringAsync();
+                            var jsonObject = JObject.Parse(content);
+                            var value = jsonObject["value"].ToString();
+
+                            var result = JsonConvert.DeserializeObject<List<JObject>>(value);
+
+                            // Insert the data into the database
+                            rowsAffected += InsertData(result, _sqlHelper, apiEndpoint);
+
+                            //allObjects.AddRange(result);
+
+                            // Check if there are more pages
+                            if (result.Count == pageSize)
+                            {
+                                // More items to fetch, update URL to get the next page
+                                int skipCount = allObjects.Count;
+                                doUrl = apiUrl + $"?$top={pageSize}&$skip={skipCount}";
+                            }
+                            else
+                            {
+                                // All items fetched, exit the loop
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            
+                            // Handel 429 - Too many requests
+                            if (ShouldRetry(response.StatusCode, retries))
+                            {
+                                _log.LogInformation($"Received: {response.StatusCode} - calculating wait time");
+                                var waitTime = CalculateWaitTime(response);
+                                _log.LogInformation($"Waiting for {waitTime.TotalSeconds} seconds before retrying");
+                                await Task.Delay(waitTime);
+
+                                // Retry the request
+                                retries++;
+                                continue;
+                            }
+                            else
+                            {
+                                // Log error
+                                _log.LogError($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                                throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                            }
+
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogError($"Error: {ex.Message}");
+
+                        if (errorCount >= 5)
+                        {
+                            // break out of the loop
+                            throw new InvalidOperationException($"Error: {ex.Message}");
+                        }
+
+                        // retry the request
+                        errorCount++;
+                        continue;
+                    }
+                }
+
             } while (true);
 
             return rowsAffected;

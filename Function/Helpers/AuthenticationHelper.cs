@@ -83,26 +83,38 @@ namespace groveale
                     { "scope", _scope }
                 };
 
-                var response = await httpClient.PostAsync(_tokenEndpoint, new FormUrlEncodedContent(request));
+                try {
 
-                if (response.IsSuccessStatusCode)
-                {
-                    var tokenResponse = await response.Content.ReadAsStringAsync();
-                    
-                    // Deserialize the JSON string into a TokenResponse object
-                    TokenResponse tokenResponseObject = Newtonsoft.Json.JsonConvert.DeserializeObject<TokenResponse>(tokenResponse);
+                    var response = await httpClient.PostAsync(_tokenEndpoint, new FormUrlEncodedContent(request));
 
-                    if (_refreshToken != tokenResponseObject.refresh_token)
+                    if (response.IsSuccessStatusCode)
                     {
-                        _keyVaultHelper.SetSecret(_secretName, tokenResponseObject.refresh_token);
-                    }
+                        var tokenResponse = await response.Content.ReadAsStringAsync();
 
-                    return tokenResponseObject.access_token;
+                        // Successful response
+                        Console.WriteLine("Successfully retrieved access token");
+
+                        // Deserialize the JSON string into a TokenResponse object
+                        TokenResponse tokenResponseObject = Newtonsoft.Json.JsonConvert.DeserializeObject<TokenResponse>(tokenResponse);
+
+                        if (_refreshToken != tokenResponseObject.refresh_token)
+                        {
+                            _keyVaultHelper.SetSecret(_secretName, tokenResponseObject.refresh_token);
+                        }
+
+                        return tokenResponseObject.access_token;
+                    }
+                    else
+                    {
+                        // Handle error
+                        throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    // Handle error
-                    throw new InvalidOperationException($"Error: {response.StatusCode} - {response.ReasonPhrase}");
+                    Console.WriteLine("Error retrieving access token");
+                    Console.WriteLine(ex.Message);
+                    return null;
                 }
             }
         }
