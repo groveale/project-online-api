@@ -33,10 +33,8 @@ public class SqlHelper
             }
         }
 
-        // Generate the SQL query dynamically
-        // string columns = string.Join(", ", JSONdata.GetType().GetProperties().Select(p => p.Name));
-        // string values = string.Join(", ", JSONdata.GetType().GetProperties().Select(p => $"@{p.Name}"));
-        string columns = string.Join(", ", columnNames);
+        // Added [] around column names to handle reserved keywords 
+        string columns = string.Join(", ", columnNames.Select(c => $"[{c}]"));
         string values = string.Join(", ", columnValues.Select(v => $"'{v.Replace("'", "''")}'")); // wrap values in single quotes and escape any apostrophes
 
         // Insert is the better approach, as data added to the prestaging table will be merged into the main tables anyway
@@ -47,13 +45,15 @@ public class SqlHelper
         //string[] keyColumnNames = { "column1", "column2" }; // Example composite key columns
         string[] keyColumnNames = _compositeKeys[tableName];
 
+        
+
         string mergeQuery = $@"
             MERGE INTO {tableName} AS target
             USING (VALUES ({values})) AS source ({columns})
-            ON {string.Join(" AND ", keyColumnNames.Select(name => $"target.{name} = source.{name}"))}
+            ON {string.Join(" AND ", keyColumnNames.Select(name => $"target.[{name}] = source.[{name}]"))}
 
             WHEN MATCHED THEN
-                UPDATE SET {string.Join(", ", columnNames.Select((name, index) => $"target.{name} = source.{name}"))}
+                UPDATE SET {string.Join(", ", columnNames.Select((name, index) => $"target.[{name}] = source.[{name}]"))}
 
             WHEN NOT MATCHED THEN
                 INSERT ({columns}) VALUES ({values});
@@ -66,7 +66,7 @@ public class SqlHelper
             using (SqlCommand command = new SqlCommand(mergeQuery, connection))
             {
                 int rowsAffected = command.ExecuteNonQuery();
-                Console.WriteLine($"{rowsAffected} rows affected.");
+                Console.WriteLine($"{rowsAffected} row affected.");
             }
         }
     }
